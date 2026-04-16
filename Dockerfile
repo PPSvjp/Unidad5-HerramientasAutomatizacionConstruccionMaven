@@ -6,7 +6,7 @@ WORKDIR /app
 COPY artifact/*.jar app.jar
 
 # Puerto habitual de Spring Boot
-EXPOSE 8080
+EXPOSE 8888
 
 # Ejecuta la aplicación java
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
