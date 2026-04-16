@@ -117,10 +117,48 @@ jobs:
     needs: build-test-package
     runs-on: ubuntu-latest
     steps:
+      # 1) Descarga el contenido del repositorio en el runner
       - uses: actions/checkout@v4
+      # 2) Descargar los artifactos: el .jar
       - uses: actions/download-artifact@v4
         with:
           name: store-app-jar
           path: artifact
+      # 3) (Opcional pero recomendable) Comprobar que existe el Dockerfile
+      - name: Verificar que existe el Dockerfile
+        run: |
+          ls -la
+          test -f Dockerfile
+      # 4) Construye la imagen usando el Dockerfile de la raíz
       - run: docker build -t store-app:ci .
-      - run: docker run -d --name store-app-test -p 8080:8080 store-app:ci
+
+      # 5) Arranca un contenedor en segundo plano exponiendo el puerto 8080
+      - name: Arrancar contenedor
+        run: |
+          docker run -d --name store-app-test -p 8888:8888 store-app:ci
+
+      # 6) Espera a que la aplicación responda en el endpoint de salud
+      - name: Comprobar endpoint de salud
+        run: |
+          for i in {1..24}; do
+            if curl -fsS http://127.0.0.1:8888/actuator/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "El contenedor no respondió a tiempo"
+          docker logs store-app-test || true
+          exit 1
+
+      # 7) Si algo falla, muestra los logs para facilitar el diagnóstico
+      - name: Mostrar logs del contenedor si falla
+        if: failure()
+        run: docker logs store-app-test || true
+
+      # 8) Limpieza final, tanto si todo va bien como si falla
+      - name: Detener y eliminar contenedor
+        if: always()
+        run: |
+          docker stop store-app-test || true
+          docker rm store-app-test || true
